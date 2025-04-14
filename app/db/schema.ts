@@ -14,6 +14,7 @@ import {
 import type { AdapterAccountType } from "next-auth/adapters";
 import { customAlphabet } from 'nanoid';
 import { MCPToolResponse } from '@/types/llm'
+import { WebSearchResponse } from '@/types/search'
 const nanoid = customAlphabet('1234567890abcdefghijklmnopqrstuvwxyz', 10)
 
 export const users = pgTable("user", {
@@ -168,6 +169,7 @@ export const chats = pgTable("chats", {
   title: varchar({ length: 255 }).notNull(),
   historyType: historyType('history_type').notNull().default('count'),
   historyCount: integer('history_count').default(5).notNull(),
+  searchEnabled: boolean('search_enabled').default(false),
   defaultModel: varchar('default_model'),
   defaultProvider: varchar('default_provider'),
   isStar: boolean('is_star').default(false),
@@ -185,6 +187,7 @@ export const chats = pgTable("chats", {
 });
 
 export const messageType = pgEnum('message_type', ['text', 'image', 'error', 'break']);
+export const messageSearchStatus = pgEnum('search_status', ['none', 'searching', 'error', 'done']);
 
 export const messages = pgTable("messages", {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
@@ -206,7 +209,9 @@ export const messages = pgTable("messages", {
   model: varchar({ length: 255 }),
   providerId: varchar({ length: 255 }).notNull(),
   type: varchar('message_type').notNull().default('text'),
-  // enabledMCPs: json('enabled_mcps').$type<MCPServer[]>(),
+  searchEnabled: boolean('search_enabled').default(false),
+  webSearch: json('web_search').$type<WebSearchResponse>(),
+  searchStatus: messageSearchStatus('search_status').notNull().default('none'),
   mcpTools: json('mcp_tools').$type<MCPToolResponse[]>(),
   inputTokens: integer('input_tokens'),
   outputTokens: integer('output_tokens'),
@@ -252,51 +257,6 @@ export type llmModelType = typeof llmModels.$inferSelect & {
 
 export type llmSettingsType = typeof llmSettingsTable.$inferSelect;
 
-export interface ChatType {
-  id: string;
-  title?: string;
-  defaultModel?: string;
-  defaultProvider?: string,
-  historyType?: 'all' | 'none' | 'count';
-  historyCount?: number;
-  isStar?: boolean;
-  isWithBot?: boolean;
-  botId?: number;
-  avatar?: string;
-  avatarType?: 'emoji' | 'url' | 'none';
-  prompt?: string;
-  createdAt: Date;
-  starAt?: Date;
-}
-
-export interface Message {
-  id?: number;
-  chatId: string;
-  role: string;
-  content: string | Array<
-    {
-      type: 'text';
-      text: string;
-    }
-    | {
-      type: 'image';
-      mimeType: string;
-      data: string;
-    }
-  >;
-  reasoninContent?: string;
-  // enabledMCPs?: MCPServer[];
-  mcpTools?: MCPToolResponse[];
-  providerId: string;
-  model: string;
-  type: 'text' | 'image' | 'error' | 'break';
-  inputTokens?: number,
-  outputTokens?: number,
-  totalTokens?: number,
-  errorType?: string,
-  errorMessage?: string,
-  createdAt: Date;
-}
 export const groupModelType = pgEnum('group_model_type', ['all', 'specific'])
 export const tokenLimitType = pgEnum('token_limit_type', ['unlimited', 'limited'])
 
@@ -327,6 +287,15 @@ export const usageReport = pgTable("usage_report", {
       }),
     },
   ])
+
+export const searchEngineConfig = pgTable("search_engine_config", {
+  id: text("id").notNull().primaryKey(),
+  name: text("name").notNull(),
+  apiKey: text("api_key"),
+  maxResults: integer("max_results").default(5).notNull(),
+  extractKeywords: boolean("extract_keywords").default(false).notNull(),
+  isActive: boolean("is_active").default(false).notNull(),
+})
 
 export const mcpServers = pgTable("mcp_servers", {
   name: text("name").notNull().primaryKey(),

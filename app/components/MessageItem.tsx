@@ -1,8 +1,8 @@
 import React, { useState, useEffect, memo, useMemo } from 'react';
-import { Message } from '@/app/db/schema';
+import { Message } from '@/types/llm';
 import { CopyToClipboard } from 'react-copy-to-clipboard';
 import { Button, Tooltip, message, Alert, Avatar, Popconfirm, Image as AntdImage } from "antd";
-import { CopyOutlined, SyncOutlined, DeleteOutlined, DownOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
+import { CopyOutlined, SyncOutlined, DeleteOutlined, DownOutlined, CheckCircleOutlined, CloseCircleOutlined, SearchOutlined } from '@ant-design/icons';
 import useModelListStore from '@/app/store/modelList';
 import ThinkingIcon from '@/app/images/thinking.svg';
 import MarkdownRender from '@/app/components/Markdown';
@@ -18,7 +18,6 @@ const MessageItem = memo((props: {
 ) => {
   const t = useTranslations('Chat');
   const { allProviderListByKey } = useModelListStore();
-  const [messageApi, contextHolderMessage] = message.useMessage();
   const [images, setImages] = useState<string[]>([]);
   const [plainText, setPlainText] = useState('');
   const [isOpen, setIsOpen] = useState(true);
@@ -166,7 +165,6 @@ const MessageItem = memo((props: {
     return <div className="flex container mx-auto pl-4 pr-2 max-w-screen-md w-full flex-col justify-center items-center" >
       <div className='items-start flex max-w-3xl text-justify w-full my-0 pt-0 pb-1 flex-row-reverse'>
         <div className='flex ml-10 flex-col items-end group'>
-          {contextHolderMessage}
           <div className='flex flex-row gap-2 mb-2'>
             {images.length > 0 &&
               images.map((image, index) => {
@@ -224,7 +222,7 @@ const MessageItem = memo((props: {
               </Button>
             </Tooltip>
             <CopyToClipboard text={plainText} onCopy={() => {
-              messageApi.success(t('copySuccess'));
+              message.success(t('copySuccess'));
             }}>
               <Tooltip title={t('copy')}>
                 <Button type="text" size='small'>
@@ -241,10 +239,22 @@ const MessageItem = memo((props: {
     return (
       <div className="flex container mx-auto px-4 max-w-screen-md w-full flex-col justify-center items-center" >
         <div className='items-start flex max-w-3xl text-justify w-full my-0 pt-0 pb-1 flex-row'>
-          {contextHolderMessage}
           {ProviderAvatar}
           <div className='flex flex-col w-0 grow group'>
             <div className='px-3 py-2 ml-2  bg-gray-100  text-gray-600 w-full grow markdown-body answer-content rounded-xl'>
+
+              {props.item.searchStatus === "searching" && <div className='flex text-xs flex-row items-center  text-gray-800 bg-gray-100 rounded-md p-2 mb-4'>
+                <SearchOutlined style={{ marginLeft: '4px' }} /> <span className='ml-2'>正在联网搜索...</span>
+              </div>
+              }
+              {props.item.searchStatus === "error" && <div className='flex text-xs flex-row items-center  text-gray-800 bg-gray-100 rounded-md p-2 mb-4'>
+                <SearchOutlined style={{ marginLeft: '4px' }} /> <span className='ml-2'>搜索出错，请联系管理员检查搜索引擎配置</span>
+              </div>
+              }
+              {props.item.searchStatus === "done" && <div className='flex text-xs flex-row items-center  text-gray-800 bg-gray-100 rounded-md p-2 mb-4'>
+                <SearchOutlined style={{ marginLeft: '4px' }} /> <span className='ml-2'>搜索完成</span>
+              </div>
+              }
 
               {props.item.reasoninContent &&
                 <details open={true} className='text-sm mt-1 mb-4'>
@@ -304,7 +314,7 @@ const MessageItem = memo((props: {
             </div>
             <div className='invisible flex flex-row items-center pl-1 group-hover:visible'>
               <CopyToClipboard text={plainText} onCopy={() => {
-                messageApi.success(t('copySuccess'));
+                message.success(t('copySuccess'));
               }}>
                 <Tooltip title={t('copy')}>
                   <Button type="text" size='small'>

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Alert } from 'antd';
 import useModelListStore from '@/app/store/modelList';
 import ChatHeader from '@/app/components/ChatHeader';
-import { MessageContent } from '@/types/llm';
+import { MessageContent, ChatType } from '@/types/llm';
 import AdaptiveTextarea from '@/app/components/AdaptiveTextarea';
 import { useTranslations } from 'next-intl';
 import { useSession } from 'next-auth/react';
@@ -13,8 +13,6 @@ import { useLoginModal } from '@/app/contexts/loginModalContext';
 import { addChatInServer } from '@/app/chat/actions/chat';
 import { addMessageInServer } from '@/app/chat/actions/message';
 import { fetchAppSettings } from '@/app/chat/actions/chat';
-import { ChatType } from '../db/schema';
-
 import { localDb } from '@/app/db/localDb';
 
 const Home = () => {
@@ -94,7 +92,11 @@ const Home = () => {
     setGreetingText(t(getGreeting()));
   }, [t]);
 
-  const newChat = async (text: string, attachments?: Array<{ mimeType: string; data: string }>) => {
+  const newChat = async (
+    text: string,
+    attachments?: Array<{ mimeType: string; data: string }>,
+    searchEnabled?: boolean,
+  ) => {
     let content: MessageContent;
     if (attachments && attachments?.length > 0) {
       const attachmentsMessages = attachments.map((attachment) => {
@@ -118,6 +120,7 @@ const Home = () => {
     const result = await addChatInServer({
       title: t('defaultChatName'),
       defaultModel: currentModel.id,
+      searchEnabled: searchEnabled,
       defaultProvider: currentModel.provider.id,
     });
     if (result.status === 'success') {
@@ -125,6 +128,7 @@ const Home = () => {
         id: result.data?.id,
         title: t('defaultChatName'),
         defaultModel: 'gpt',
+        searchEnabled: searchEnabled,
         createdAt: new Date(),
       };
       setChatList([initInfo as ChatType, ...chatList]);
@@ -134,6 +138,7 @@ const Home = () => {
         role: 'user',
         type: 'text' as const,
         model: currentModel.id,
+        searchEnabled: searchEnabled,
         providerId: currentModel.provider.id,
         createdAt: new Date(),
       };

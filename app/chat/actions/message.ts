@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { MCPToolResponse } from '@/types/llm';
 import { eq, and, asc } from 'drizzle-orm';
 import { messages } from '@/app/db/schema';
+import { searchResultType, WebSearchResponse } from '@/types/search';
 
 export const clearMessageInServer = async (chatId: string) => {
   const session = await auth();
@@ -81,6 +82,8 @@ export const addMessageInServer = async (message: {
     }
   >,
   reasoninContent?: string,
+  searchEnabled?: boolean,
+  searchStatus?: searchResultType,
   mcpTools?: MCPToolResponse[],
   providerId: string,
   model: string,
@@ -98,24 +101,49 @@ export const addMessageInServer = async (message: {
       message: 'please login first.'
     }
   }
-
   const [result] = await db.insert(messages)
-    .values({
-      chatId: message.chatId,
-      userId: session.user.id,
-      role: message.role,
-      content: message.content,
-      reasoninContent: message.reasoninContent,
-      mcpTools: message.mcpTools,
-      model: message.model,
-      providerId: message.providerId,
-      type: message.type,
-      inputTokens: message.inputTokens,
-      outputTokens: message.outputTokens,
-      totalTokens: message.totalTokens,
-      errorType: message.errorType,
-      errorMessage: message.errorMessage,
-    })
+    .values({ userId: session.user.id, ...message })
     .returning();
   return result.id;
+}
+
+export const updateMessageWebSearchInServer = async (
+  messageId: number,
+  searchEnabled: boolean,
+  searchStatus: "none" | "searching" | "error" | "done",
+  webSearch?: WebSearchResponse,
+) => {
+  const session = await auth();
+  if (!session?.user.id) {
+    return {
+      status: 'fail',
+      message: 'please login first.'
+    }
+  }
+
+  try {
+    await db.update(messages)
+      .set({
+        searchEnabled: searchEnabled,
+        searchStatus: searchStatus,
+        webSearch: webSearch,
+        updatedAt: new Date()
+      })
+      .where(
+        and(
+          eq(messages.id, messageId),
+          eq(messages.userId, session.user.id)
+        ));
+
+    return {
+      status: 'success',
+      message: '搜索信息已保存'
+    };
+  } catch (error) {
+    console.error('同步搜索响应失败:', error);
+    return {
+      status: 'fail',
+      message: '同步搜索失败'
+    };
+  }
 }

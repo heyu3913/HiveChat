@@ -1,3 +1,5 @@
+import { WebSearchResponse } from '@/types/search';
+
 export abstract class LLMApi {
   abstract chat(options: ChatOptions): Promise<void>;
   abstract prepareMessage?<T>(messages: RequestMessage[]): T[];
@@ -6,17 +8,66 @@ export abstract class LLMApi {
   abstract models(): Promise<LLMModel[]>;
 }
 
-export interface ResponseContent {
+export type ChatType = {
+  id: string;
+  title?: string;
+  defaultModel?: string;
+  defaultProvider?: string,
+  searchEnabled?: boolean,
+  historyType?: 'all' | 'none' | 'count';
+  historyCount?: number;
+  isStar?: boolean;
+  isWithBot?: boolean;
+  botId?: number;
+  avatar?: string;
+  avatarType?: 'emoji' | 'url' | 'none';
+  prompt?: string;
+  createdAt: Date;
+  starAt?: Date;
+}
+
+export type Message = {
+  id?: number;
+  chatId: string;
+  role: string;
+  content: string | Array<
+    {
+      type: 'text';
+      text: string;
+    }
+    | {
+      type: 'image';
+      mimeType: string;
+      data: string;
+    }
+  >;
+  reasoninContent?: string;
+  searchEnabled?: boolean;
+  searchStatus?: "none" | "searching" | "error" | "done";
+  mcpTools?: MCPToolResponse[];
+  webSearch?: WebSearchResponse;
+  providerId: string;
+  model: string;
+  type: 'text' | 'image' | 'error' | 'break';
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+  errorType?: string;
+  errorMessage?: string;
+  createdAt: Date;
+}
+
+export type ResponseContent = {
   id?: number;
   content: string;
   reasoning_content?: string;
-  inputTokens?: number,
-  outputTokens?: number,
-  totalTokens?: number,
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
   mcpTools?: MCPToolResponse[];
 }
 
-export interface ChatOptions {
+export type ChatOptions = {
   messages: RequestMessage[];
   config: LLMConfig;
   chatId?: string;

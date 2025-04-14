@@ -1,14 +1,18 @@
 'use server';
 import { db } from '@/app/db';
 import { auth } from "@/auth";
-import { eq, and, desc, asc } from 'drizzle-orm'
-import { chats, ChatType, messages, appSettings, mcpServers, mcpTools } from '@/app/db/schema';
+import { eq, and, desc, asc, inArray } from 'drizzle-orm';
+import { ChatType, MCPToolResponse } from '@/types/llm';
+import WebSearchService from '@/app/services/WebSearchService';
+import { chats, messages, appSettings, mcpServers, mcpTools, searchEngineConfig } from '@/app/db/schema';
+import { WebSearchResponse } from '@/types/search';
 
 export const addChatInServer = async (
   chatInfo: {
     title: string;
     defaultModel?: string;
     defaultProvider?: string;
+    searchEnabled?: boolean;
     historyType?: 'all' | 'none' | 'count';
     historyCount?: number;
     isStar?: boolean;
@@ -68,6 +72,7 @@ export const getChatInfoInServer = async (chatId: string): Promise<{ status: str
         title: data.title ?? undefined,
         defaultModel: data.defaultModel ?? undefined,
         defaultProvider: data.defaultProvider ?? undefined,
+        searchEnabled: data.searchEnabled ?? undefined,
         historyType: data.historyType ?? undefined,
         historyCount: data.historyCount ?? undefined,
         isStar: data.isStar ?? undefined,
@@ -226,17 +231,25 @@ export const fetchAppSettings = async (key: string) => {
   return result?.value;
 }
 
-// export const getActiveMcpServers = async () => {
-//   try {
-//     const result = await db.query.mcpServers.findMany({
-//       where: eq(mcpServers.isActive, true),
-//       orderBy: [mcpServers.createdAt],
-//     });
-//     return result;
-//   } catch (error) {
-//     return [];
-//   }
-// }
+export const fetchSettingsByKeys = async (keys: Array<string>) => {
+  const results = await db.query.appSettings
+    .findMany({
+      where: (appSettings) => inArray(appSettings.key, keys)
+    });
+
+  // Initialize the result object with all requested keys set to null
+  const settingsObject = keys.reduce((acc, key) => {
+    acc[key] = null;
+    return acc;
+  }, {} as Record<string, string | null>);
+
+  // Update the values for keys that exist in the database
+  results.forEach(setting => {
+    settingsObject[setting.key] = setting.value;
+  });
+
+  return settingsObject;
+}
 
 export const getMcpServersAndAvailableTools = async () => {
   try {
@@ -268,5 +281,68 @@ export const getMcpServersAndAvailableTools = async () => {
       tools: [],
       mcpServers: []
     };
+  }
+}
+
+export const syncMcpTools = async (messageId: number, mcpToolsResponse: MCPToolResponse[]) => {
+  try {
+    await db.update(messages)
+      .set({
+        mcpTools: mcpToolsResponse,
+        updatedAt: new Date()
+      })
+      .where(eq(messages.id, messageId));
+
+    return {
+      status: 'success',
+      message: '工具信息已保存'
+    };
+  } catch (error) {
+    console.error('同步 MCP 工具响应失败:', error);
+    return {
+      status: 'fail',
+      message: '同步工具失败'
+    };
+  }
+}
+
+export const getSearchResult = async (keyword: string): Promise<{
+  status: string;
+  message: string;
+  data: WebSearchResponse | null;
+}> => {
+  const session = await auth();
+  if (!session?.user) {
+    throw new Error('not allowed');
+  }
+
+  const searchConfig = await db.query.searchEngineConfig.findFirst({
+    where: eq(searchEngineConfig.isActive, true)
+  });
+  if (searchConfig) {
+    try {
+      const webSearch = await WebSearchService.search({
+        id: searchConfig.id,
+        name: searchConfig.name,
+        apiKey: searchConfig.apiKey as string
+      }, keyword, searchConfig.maxResults);
+      return {
+        status: 'success',
+        message: 'success',
+        data: webSearch
+      }
+    } catch (error) {
+      return {
+        status: 'error',
+        message: error instanceof Error ? error.message : 'Unknown error',
+        data: null,
+      }
+    }
+  } else {
+    return {
+      status: 'error',
+      message: '管理员未配置搜索',
+      data: null
+    }
   }
 }
