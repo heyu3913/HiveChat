@@ -77,7 +77,7 @@ export default function RegisterPage() {
       <div className="flex items-center flex-row  mb-6">
         <Link href="/" className='flex items-center'>
           <Image src={logo} className="ml-1" alt="HiveChat logo" width={32} height={32} />
-          <Hivechat className="ml-1" alt="HiveChat text" width={156} height={39} />
+          {/* <Hivechat className="ml-1" alt="HiveChat text" width={156} height={39} /> */}
         </Link>
       </div>
       <div className="w-full max-w-sm space-y-6 rounded-lg bg-white p-6 shadow-xl">

@@ -85,6 +85,9 @@ export default function LoginModal() {
       <div className="flex items-center justify-center flex-row mb-6 mt-4">
         <Image src={logo} className="ml-1" alt="HiveChat logo" width={28} height={28} />
         <Hivechat className="ml-1" alt="HiveChat text" width={120} />
+        {/* <span className="ml-1 text-xl font-semibold text-gray-800">HangYeJingLing</span>
+         */}
+        {/* <span className="ml-1 text-xl font-bold text-blue-600">HangYeJingLing</span> */}
         <span className="text-center text-xl">{t('login')}</span>
       </div>
       {isPending ? <div className='mt-4 mb-6'>
