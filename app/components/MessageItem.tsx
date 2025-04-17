@@ -239,7 +239,12 @@ const MessageItem = memo((props: {
     return (
       <div className="flex container mx-auto px-4 max-w-screen-md w-full flex-col justify-center items-center" >
         <div className='items-start flex max-w-3xl text-justify w-full my-0 pt-0 pb-1 flex-row'>
-          {ProviderAvatar}
+          <div className='flex flex-col h-full'>
+            {ProviderAvatar}
+            {/* <div className="flex justify-center h-0 grow">
+              <div className="h-full border-l border-dashed border-gray-300 my-1"></div>
+            </div> */}
+          </div>
           <div className='flex flex-col w-0 grow group'>
             <div className='px-3 py-2 ml-2  bg-gray-100  text-gray-600 w-full grow markdown-body answer-content rounded-xl'>
 
@@ -277,7 +282,21 @@ const MessageItem = memo((props: {
                     <MarkdownRender content={props.item.reasoninContent as string} />
                   </div>
                 </details>}
-              <MarkdownRender content={props.item.content as string} />
+              {typeof props.item.content === 'string' && <MarkdownRender content={props.item.content} />
+              }
+
+              {
+                Array.isArray(props.item.content) && props.item.content.map((part, index) =>
+                  <div key={index}>
+                    {part.type === 'text' && <MarkdownRender content={part.text} />}
+                    {part.type === 'image' && <AntdImage
+                      className='cursor-pointer'
+                      src={part.data}
+                      preview={{ mask: false }}
+                      style={{ maxWidth: '250px', borderRadius: '4px', boxShadow: '3px 4px 7px 0px #dedede' }} />}
+                  </div>)
+              }
+
               {
                 props.item.mcpTools && props.item.mcpTools.map((mcp, index) => {
                   return <details open={false} key={index} className='flex flex-row bg-gray-100 hover:bg-slate-100 text-gray-800 rounded-md mb-3  border border-gray-200 text-sm'>
