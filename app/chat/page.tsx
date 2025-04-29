@@ -13,7 +13,6 @@ import { useLoginModal } from '@/app/contexts/loginModalContext';
 import { addChatInServer } from '@/app/chat/actions/chat';
 import { addMessageInServer } from '@/app/chat/actions/message';
 import { fetchAppSettings } from '@/app/chat/actions/chat';
-import { localDb } from '@/app/db/localDb';
 
 const Home = () => {
   const t = useTranslations('Chat');
@@ -32,12 +31,12 @@ const Home = () => {
   }, [status, showLogin]);
 
   useEffect(() => {
-    if (!isPending && modelList.length === 0) {
+    if (!isPending && modelList.length === 0 && status === 'authenticated') {
       setShowGuideAlert(true);
     } else {
       setShowGuideAlert(false);
     }
-  }, [isPending, modelList]);
+  }, [isPending, modelList, status]);
 
   useEffect(() => {
     const fetchDefaultChatModel = async () => {
@@ -142,9 +141,7 @@ const Home = () => {
         providerId: currentModel.provider.id,
         createdAt: new Date(),
       };
-      localDb.messages.add(toAddMessage);
       await addMessageInServer(toAddMessage);
-      localStorage.setItem('f', 'home');
       router.push(`/chat/${result.data?.id}?f=home`);
     }
   };
@@ -162,7 +159,7 @@ const Home = () => {
       }
       <div className='flex w-full grow flex-col items-center justify-center h-full'>
         <div className='container max-w-3xl mx-auto -mt-16 relative items-center justify-center'>
-          <h2 className='text-3xl font-bold text-center mb-8'>{greetingText && <>👋 {greetingText}{t('welcomeNotice')}</>}&nbsp;</h2>
+          <h2 className='text-2xl font-bold text-center mb-8'>{greetingText && <>👋 {greetingText}{t('welcomeNotice')}</>}&nbsp;</h2>
           <AdaptiveTextarea model={currentModel} submit={newChat} />
         </div>
       </div>
