@@ -11,7 +11,6 @@ import useGlobalConfigStore from '@/app/store/globalConfig';
 import { getSearchResult } from '@/app/chat/actions/chat';
 import { searchResultType, WebSearchResponse } from '@/types/search';
 import { REFERENCE_PROMPT } from '@/app/config/prompts';
-import useRouteState from '@/app/hooks/chat/useRouteState';
 import { useRouter } from 'next/navigation'
 
 const useChat = (chatId: string) => {
@@ -23,7 +22,6 @@ const useChat = (chatId: string) => {
   const [chatBot, setChatBot] = useState<LLMApi | null>(null);
   const [responseMessage, setResponseMessage] = useState<ResponseContent>({ content: '', reasoningContent: '' });
   const [isUserScrolling, setIsUserScrolling] = useState(false);
-  const [input, setInput] = useState('');
   const [userSendCount, setUserSendCount] = useState(0);
   const { chat, initializeChat, setWebSearchEnabled, webSearchEnabled, historyType, historyCount } = useChatStore();
   const { setNewTitle } = useChatListStore();
@@ -43,11 +41,6 @@ const useChat = (chatId: string) => {
       }
     };
   }, [currentModel]);
-
-
-  const handleInputChange = (e: any) => {
-    setInput(e.target.value);
-  };
 
   const chatNamingModelStable = useMemo(() => chatNamingModel, [chatNamingModel]);
   const shouldSetNewTitle = useCallback((messages: RequestMessage[]) => {
@@ -247,20 +240,27 @@ const useChat = (chatId: string) => {
     let searchStatus: searchResultType = 'none';
     let searchResponse: WebSearchResponse | undefined;
 
-    setSearchStatus("searching");
-    const textContent = typeof message === 'string' ? message : '';
-    if (textContent) {
-      const searchResult = await getSearchResult(textContent);
-      if (searchResult.status === 'success') {
-        searchResponse = searchResult.data || undefined;
-        const referenceContent = `\`\`\`json\n${JSON.stringify(searchResult, null, 2)}\n\`\`\``;
-        realSendMessage = REFERENCE_PROMPT.replace('{question}', textContent).replace('{references}', referenceContent);
-        setSearchStatus("done");
-        searchStatus = 'done'
-      } else {
-        setSearchStatus("error");
-        searchStatus = 'error';
+    try {
+      setSearchStatus("searching");
+      const textContent = typeof message === 'string' ? message : '';
+      if (textContent) {
+        const searchResult = await getSearchResult(textContent);
+        
+        if (searchResult.status === 'success') {
+          searchResponse = searchResult.data || undefined;
+          const referenceContent = `\`\`\`json\n${JSON.stringify(searchResult, null, 2)}\n\`\`\``;
+          realSendMessage = REFERENCE_PROMPT.replace('{question}', textContent).replace('{references}', referenceContent);
+          setSearchStatus("done");
+          searchStatus = 'done';
+        } else {
+          setSearchStatus("error");
+          searchStatus = 'error';
+        }
       }
+    } catch (error) {
+      console.error('handleWebSearch - error:', error);
+      setSearchStatus("error");
+      searchStatus = 'error';
     }
 
     return {
@@ -268,9 +268,7 @@ const useChat = (chatId: string) => {
       searchStatus,
       searchResponse
     };
-  }, [
-    // webSearchEnabled
-  ]);
+  }, []);
 
   const handleSubmit = useCallback(async (message: MessageContent) => {
     if (responseStatus === 'pending') {
@@ -289,7 +287,6 @@ const useChat = (chatId: string) => {
       type: 'text' as const,
     };
 
-    setInput('');
     setMessageList((m) => ([...m, { ...currentMessage, createdAt: new Date() }]));
     addMessageInServer(currentMessage);
     setUserSendCount(userSendCount + 1);
@@ -363,7 +360,6 @@ const useChat = (chatId: string) => {
     } else {
       // 单独处理重试的逻辑
       setResponseStatus("pending");
-      setInput('');
       const messages: RequestMessage[] = prepareMessageFromIndex(index);
       sendMessage(messages);
       shouldSetNewTitle(messages)
@@ -405,50 +401,65 @@ const useChat = (chatId: string) => {
 
   const shouldSetNewTitleRef = useRef(shouldSetNewTitle);
   const processedMessageIds = useRef(new Set<string>());
+  const hasInitialized = useRef(false);
 
   useEffect(() => {
     const handleInitialResponse = async () => {
-      // 使用URL查询参数检测是否来自首页
-      const urlParams = new URLSearchParams(window.location.search);
-      const fromHome = urlParams.get('f') === 'home';
-      
-      if (!fromHome) return;
-      
-      // 清除URL参数
-      router.replace(`/chat/${chatId}`);
-      
-      // 检查是否有未回复的用户消息
-      if (messageList.length === 1 && messageList[0].role === 'user') {
-        const userMessage = messageList[0];
-        // 创建一个消息标识符
-        const messageId = `${userMessage.id || '-'}`;
+      if (hasInitialized.current) {
+        return;
+      }
+
+      try {
+        // 使用URL查询参数检测是否来自首页
+        const urlParams = new URLSearchParams(window.location.search);
+        const fromHome = urlParams.get('f') === 'home';
+        if (!fromHome) return;
         
-        // 检查是否已处理过这条消息
-        if (processedMessageIds.current.has(messageId)) {
-          return;
+        // 清除URL参数
+        router.replace(`/chat/${chatId}`);
+        
+        // 检查是否有未回复的用户消息
+        if (messageList.length === 1 && messageList[0].role === 'user') {
+          const userMessage = messageList[0];
+          // 创建一个消息标识符
+          const messageId = `${userMessage.id || '-'}`;
+          
+          // 检查是否已处理过这条消息
+          if (processedMessageIds.current.has(messageId)) {
+            return;
+          }
+          
+          // 标记消息为已处理
+          processedMessageIds.current.add(messageId);
+          hasInitialized.current = true;
+          
+          const _searchEnabled = userMessage.searchEnabled || false;
+          const question = userMessage.content;
+          
+          // 处理请求发送
+          let realSendMessage = question;
+          let searchStatus: searchResultType = 'none';
+          let searchResponse = undefined;
+          
+          if (_searchEnabled) {
+            setResponseStatus('pending');
+            try {
+              const result = await handleWebSearch(question);
+              realSendMessage = result.realSendMessage;
+              searchStatus = result.searchStatus;
+              searchResponse = result.searchResponse;
+            } catch (error) {
+              console.error('handleInitialResponse - web search error:', error);
+              searchStatus = 'error';
+            }
+          }
+          
+          const messages = [{ role: 'user' as const, content: realSendMessage }];
+          await sendMessage(messages, searchStatus, searchResponse, selectedTools);
+          shouldSetNewTitleRef.current([{ role: 'user' as const, content: question }]);
         }
-        
-        // 标记消息为已处理
-        processedMessageIds.current.add(messageId);
-        
-        const _searchEnabled = userMessage.searchEnabled || false;
-        const question = userMessage.content;
-        
-        // 处理请求发送
-        let realSendMessage = question;
-        let searchStatus: searchResultType = 'none';
-        let searchResponse = undefined;
-        
-        if (_searchEnabled) {
-          setResponseStatus('pending');
-          const result = await handleWebSearch(question);
-          realSendMessage = result.realSendMessage;
-          searchStatus = result.searchStatus;
-          searchResponse = result.searchResponse;
-        }
-        const messages = [{ role: 'user' as const, content: realSendMessage }];
-        await sendMessage(messages, searchStatus, searchResponse, selectedTools);
-        shouldSetNewTitleRef.current([{ role: 'user' as const, content: question }]);
+      } catch (error) {
+        console.error('handleInitialResponse - error:', error);
       }
     };
     
@@ -458,7 +469,6 @@ const useChat = (chatId: string) => {
   }, [messageList, chatId, selectedTools, router, sendMessage, handleWebSearch]);
 
   return {
-    input,
     chat,
     messageList,
     searchStatus,
@@ -469,7 +479,6 @@ const useChat = (chatId: string) => {
     isUserScrolling,
     currentModel,
     isPending,
-    handleInputChange,
     handleSubmit,
     sendMessage,
     shouldSetNewTitle,

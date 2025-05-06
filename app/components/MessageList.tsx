@@ -1,8 +1,7 @@
 'use client'
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Button, Input, Tooltip, Modal, Popover, Skeleton, message } from "antd";
-import { PictureOutlined, ClearOutlined, FieldTimeOutlined, ArrowUpOutlined, GlobalOutlined } from '@ant-design/icons';
-import { Square } from '@icon-park/react';
+import { Button, Tooltip, Modal, Popover, Skeleton, message } from "antd";
+import { PictureOutlined, ClearOutlined, FieldTimeOutlined, GlobalOutlined } from '@ant-design/icons';
 import Eraser from '@/app/images/eraser.svg';
 import NewChatIcon from '@/app/images/newChat.svg';
 import McpIcon from "@/app/images/mcp.svg";
@@ -23,6 +22,7 @@ import useChatStore from '@/app/store/chat';
 import ImagePreviewArea from '@/app/components/ImagePreviewArea';
 import ScrollToBottomButton from '@/app/components/ScrollToBottomButton';
 import { useTranslations } from 'next-intl';
+import ChatInput from '@/app/components/ChatInput';
 
 export const MessageList = (props: { chat_id: string }) => {
   const t = useTranslations('Chat');
@@ -31,9 +31,7 @@ export const MessageList = (props: { chat_id: string }) => {
   const [historySettingOpen, SetHistorySettingOpen] = useState(false);
   const [mcpServerSelectOpen, SetMcpServerSelectOpen] = useState(false);
   const [stableShowScrollButton, setStableShowScrollButton] = useState(false);
-  const [isProgrammaticScroll, setIsProgrammaticScroll] = useState(false);
   const {
-    input,
     chat,
     messageList,
     searchStatus,
@@ -44,7 +42,6 @@ export const MessageList = (props: { chat_id: string }) => {
     isUserScrolling,
     currentModel,
     isPending,
-    handleInputChange,
     clearHistory,
     handleSubmit,
     deleteMessage,
@@ -97,12 +94,13 @@ export const MessageList = (props: { chat_id: string }) => {
     responseMessage.content,
     responseMessage.reasoningContent,
     responseMessage.mcpTools?.length,
-    isUserScrolling
+    isUserScrolling,
+    messageList.length
   ]);
 
   const handleScroll = useCallback(() => {
     const chatElement = messageListRef.current;
-    if (!chatElement || isProgrammaticScroll) return;
+    if (!chatElement) return;
 
     try {
       const isNearBottom = chatElement.scrollHeight - chatElement.scrollTop <= chatElement.clientHeight + 20;
@@ -113,7 +111,7 @@ export const MessageList = (props: { chat_id: string }) => {
     } catch (error) {
       console.error('Scroll calculation error:', error);
     }
-  }, [setIsUserScrolling, responseStatus, isUserScrolling, isProgrammaticScroll]);
+  }, [setIsUserScrolling, responseStatus, isUserScrolling]);
 
   const throttledHandleScroll = useMemo(
     () => throttle(handleScroll, 100, { leading: true, trailing: true }),
@@ -149,7 +147,11 @@ export const MessageList = (props: { chat_id: string }) => {
   }, [messageList, responseStatus]);
 
   useEffect(() => {
-    setWebSearchEnabled(false)
+    const urlParams = new URLSearchParams(window.location.search);
+    const fromHome = urlParams.get('f') === 'home';
+    if (!fromHome) {
+      setWebSearchEnabled(false)
+    }
   }, [props.chat_id, setWebSearchEnabled]);
 
   useEffect(() => {
@@ -160,13 +162,10 @@ export const MessageList = (props: { chat_id: string }) => {
 
   const scrollToBottom = () => {
     if (messageListRef.current) {
-      setIsProgrammaticScroll(true);
       messageListRef.current.scrollTo({
         top: messageListRef.current.scrollHeight,
         behavior: 'smooth'
       });
-      setTimeout(() => setIsProgrammaticScroll(false), 100);
-      setIsUserScrolling(false);
     }
   };
 
@@ -185,7 +184,7 @@ export const MessageList = (props: { chat_id: string }) => {
           variant="filled"
         >
           <GlobalOutlined style={{ width: '12px', height: '12px' }} />
-          <span className="text-xs -ml-1">联网搜索</span>
+          <span className="text-xs -ml-1">{t('webSearch')}</span>
         </Button>
       );
     } else {
@@ -197,65 +196,40 @@ export const MessageList = (props: { chat_id: string }) => {
           onClick={() => setWebSearchEnabled(!webSearchEnabled)}
         >
           <GlobalOutlined style={{ color: 'gray', width: '12px', height: '12px' }} />
-          <span className="text-xs -ml-1 text-gray-500">联网搜索</span>
+          <span className="text-xs -ml-1 text-gray-500">{t('webSearch')}</span>
         </Button>
       );
     }
   };
 
-  const handleKeyDown = async (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.nativeEvent.isComposing) return;
+  const handleSubmitMessage = useCallback(async (message: string) => {
+    let messageContent;
+    if (uploadedImages.length > 0) {
+      const imageMessages = await Promise.all(uploadedImages
+        .filter(img => img.file)
+        .map(async (img) => ({
+          type: 'image' as const,
+          mimeType: img.file!.type,
+          data: await fileToBase64(img.file!)
+        })));
 
-    if (e.key === 'Enter') {
-      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
-        // Command/Ctrl + Enter: 插入换行
-        e.preventDefault();
-        const target = e.currentTarget;
-        const start = target.selectionStart;
-        const end = target.selectionEnd;
-        const newValue = target.value.substring(0, start) + '\n' + target.value.substring(end);
-
-        handleInputChange({
-          target: { value: newValue }
-        } as React.ChangeEvent<HTMLTextAreaElement>);
-
-        setTimeout(() => {
-          target.selectionStart = target.selectionEnd = start + 1;
-        }, 0);
-        return;
-      }
-
-      e.preventDefault();
-      if (input.trim() === '' || responseStatus === 'pending') return;
-
-      let messageContent;
-      if (uploadedImages.length > 0) {
-        const imageMessages = await Promise.all(uploadedImages
-          .filter(img => img.file)
-          .map(async (img) => ({
-            type: 'image' as const,
-            mimeType: img.file!.type,
-            data: await fileToBase64(img.file!)
-          })));
-
-        messageContent = [
-          { type: 'text' as const, text: input },
-          ...imageMessages
-        ];
-      } else {
-        messageContent = input;
-      }
-
-      handleSubmit(messageContent).then(() => {
-        setTimeout(() => {
-          if (messageListRef.current) {
-            messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
-          }
-        }, 10);
-        setUploadedImages([]);
-      });
+      messageContent = [
+        { type: 'text' as const, text: message },
+        ...imageMessages
+      ];
+    } else {
+      messageContent = message;
     }
-  };
+
+    setTimeout(() => {
+      if (messageListRef.current) {
+        messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
+      }
+    }, 10);
+    handleSubmit(messageContent).then(() => {
+      setUploadedImages([]);
+    });
+  }, [uploadedImages, handleSubmit, setUploadedImages]);
 
   const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     if (e.clipboardData.files.length > 0) {
@@ -291,6 +265,30 @@ export const MessageList = (props: { chat_id: string }) => {
     }, 10);
   };
 
+  // 使用 useMemo 优化消息列表渲染
+  const renderedMessageList = useMemo(() => {
+    return messageList.map((item, index) => {
+      let showLine = false;
+      if (index < messageList.length - 1 && item.role === 'assistant' && messageList[index + 1]?.role === 'assistant') {
+        showLine = true;
+      }
+      if (index === messageList.length - 1 && item.role === 'assistant' && responseStatus === 'pending') {
+        showLine = true;
+      }
+      return (
+        <MessageItem
+          key={index}
+          isConsecutive={showLine}
+          role={item.role as 'assistant' | 'user' | 'system'}
+          item={item}
+          index={index}
+          retryMessage={retryMessage}
+          deleteMessage={deleteMessage}
+        />
+      );
+    });
+  }, [messageList, responseStatus, retryMessage, deleteMessage]);
+
   return (
     <>
       {contextHolder}
@@ -320,26 +318,7 @@ export const MessageList = (props: { chat_id: string }) => {
             </div>
             <Skeleton avatar={{ size: 'default' }} active title={false} paragraph={{ rows: 4, width: ['60%', '60%', '100%', '100%'] }} />
           </div> :
-          messageList.map((item, index) => {
-            let showLine = false;
-            if (index < messageList.length - 1 && item.role === 'assistant' && messageList[index + 1]?.role === 'assistant') {
-              showLine = true;
-            }
-            if (index === messageList.length - 1 && item.role === 'assistant' && responseStatus === 'pending') {
-              showLine = true;
-            }
-            return (
-              <MessageItem
-                key={index}
-                isConsecutive={showLine}
-                role={item.role as 'assistant' | 'user' | 'system'}
-                item={item}
-                index={index}
-                retryMessage={retryMessage}
-                deleteMessage={deleteMessage}
-              />
-            )
-          })
+          renderedMessageList
         }
         <ResponsingMessage
           searchStatus={searchStatus}
@@ -393,16 +372,16 @@ export const MessageList = (props: { chat_id: string }) => {
                 open={mcpServerSelectOpen}
                 onOpenChange={(open) => { SetMcpServerSelectOpen(open) }}
               >
-                <Tooltip title="MCP 服务器" placement='bottom' arrow={false} >
+                <Tooltip title={t('mcpServer')} placement='bottom' arrow={false} >
                   {hasMcpSelected ? (
                     <Button type="text" size='small' color="primary" variant="filled">
                       <McpIcon style={{ width: '13px', height: '13px' }} />
-                      <span className='text-xs -ml-1'>MCP 工具</span>
+                      <span className='text-xs -ml-1'>{t('mcpTool')}</span>
                     </Button>
                   ) : (
                     <Button type="text" size='small' >
                       <McpIcon style={{ width: '13px', height: '13px' }} />
-                      <span className='text-xs -ml-1 text-gray-500'>MCP 工具</span>
+                      <span className='text-xs -ml-1 text-gray-500'>{t('mcpTool')}</span>
                     </Button>
                   )}
                 </Tooltip>
@@ -443,71 +422,12 @@ export const MessageList = (props: { chat_id: string }) => {
           </div>
         </div>
 
-        <div className='flex h-full max-w-3xl w-full relative pl-2 pr-2'>
-          <Input.TextArea
-            onChange={handleInputChange}
-            value={input}
-            autoFocus={true}
-            onPaste={handlePaste}
-            onKeyDown={handleKeyDown}
-            placeholder="发送消息"
-            className='scrollbar-thin scrollbar-thumb-rounded-full scrollbar-track-rounded-full scrollbar-thumb-gray-300 scrollbar-track-gray-100 scrollbar-rou'
-            style={{ paddingRight: '5em', resize: 'none', scrollbarColor: '#eaeaea transparent' }}
-          />
-
-          {responseStatus === 'done' && (
-            <Button
-              type="primary"
-              size='small'
-              style={{ position: 'absolute' }}
-              className='absolute right-4 bottom-2'
-              shape="circle"
-              onClick={async () => {
-                if (input.trim() === '') return;
-
-                let messageContent;
-                if (uploadedImages.length > 0) {
-                  const imageMessages = await Promise.all(uploadedImages
-                    .filter(img => img.file)
-                    .map(async (img) => ({
-                      type: 'image' as const,
-                      mimeType: img.file!.type,
-                      data: await fileToBase64(img.file!)
-                    })));
-
-                  messageContent = [
-                    { type: 'text' as const, text: input },
-                    ...imageMessages
-                  ];
-                } else {
-                  messageContent = input;
-                }
-
-                setTimeout(() => {
-                  if (messageListRef.current) {
-                    messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
-                  }
-                }, 10);
-                handleSubmit(messageContent).then(() => {
-                  setUploadedImages([]);
-                });
-              }}
-              icon={<ArrowUpOutlined />}
-            />
-          )}
-
-          {responseStatus === 'pending' && (
-            <Button
-              type="primary"
-              size='small'
-              style={{ position: 'absolute' }}
-              className='absolute right-4 bottom-2'
-              shape="circle"
-              onClick={stopChat}
-              icon={<Square theme="filled" size="12" fill="#ffffff" />}
-            />
-          )}
-        </div>
+        <ChatInput
+          responseStatus={responseStatus}
+          onPaste={handlePaste}
+          onSubmit={handleSubmitMessage}
+          onStop={stopChat}
+        />
       </div>
     </>
   );
