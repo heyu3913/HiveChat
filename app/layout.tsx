@@ -6,6 +6,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
 import { SessionProvider } from 'next-auth/react';
 import "./globals.css";
+import Script from 'next/script';
 
 export const metadata: Metadata = {
   title: "行业精灵",
@@ -34,6 +35,21 @@ export default async function RootLayout({
           <SessionProvider>
             <AntdRegistry>
               {children}
+              <Script
+                id="baidu-analytics"
+                strategy="afterInteractive"
+                dangerouslySetInnerHTML={{
+                  __html: `
+              var _hmt = _hmt || [];
+              (function() {
+                var hm = document.createElement("script");
+                hm.src = "https://hm.baidu.com/hm.js?e15744a2ce60a55d13de44d74c81e586";
+                var s = document.getElementsByTagName("script")[0]; 
+                s.parentNode.insertBefore(hm, s);
+              })();
+            `,
+                }}
+              />
             </AntdRegistry>
           </SessionProvider>
         </NextIntlClientProvider>
