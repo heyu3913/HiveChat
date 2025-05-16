@@ -2,6 +2,7 @@
    <img width="32" height="32" src="https://jiantuku.oss-cn-beijing.aliyuncs.com/share/logo.png" />
    <img height="32" alt="HiveChat" src="https://jiantuku.oss-cn-beijing.aliyuncs.com/share/hivechat.png" />
    <p>中文 ｜ <a href="https://github.com/HiveNexus/HiveChat/blob/main/README_EN.md">English</a><p>
+   <a href="https://deepwiki.com/HiveNexus/HiveChat" target="_blank"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
    <p>专为中小团队设计的 AI 聊天应用，支持 Deepseek、Open AI、Claude、Gemini 等模型。</p>
 </div>
 
@@ -40,11 +41,11 @@
 ### 普通用户端
 登录账号，即可对话。
 
-![image](https://jiantuku.oss-cn-beijing.aliyuncs.com/share/003.png)
+![image](https://jiantuku.oss-cn-beijing.aliyuncs.com/share/hivechat/01.png)
 
 MCP 使用
 
-![image](https://jiantuku.oss-cn-beijing.aliyuncs.com/share/mcp-use.png)
+![image](https://jiantuku.oss-cn-beijing.aliyuncs.com/share/hivechat/02.png)
 
 ### 管理后台
 
@@ -52,17 +53,19 @@ MCP 使用
 * 可手动添加用户，也可开启或关闭账号注册，适用于公司/学校/组织等小型团队
 * 查看和管理全部用户
 
-![image](https://jiantuku.oss-cn-beijing.aliyuncs.com/share/model.png)
+![image](https://jiantuku.oss-cn-beijing.aliyuncs.com/share/hivechat/03.png)
 
 <details>
   <summary>更多图片</summary>
    用户管理，可以为用户设置分组，针对不同分组设置可见模型和 Token 限额
-   <img src="https://jiantuku.oss-cn-beijing.aliyuncs.com/share/users.png" />
-   <img src="https://jiantuku.oss-cn-beijing.aliyuncs.com/share/user-group.png" />
+   <img src="https://jiantuku.oss-cn-beijing.aliyuncs.com/share/hivechat/04.png" />
+   <img src="https://jiantuku.oss-cn-beijing.aliyuncs.com/share/hivechat/05.png" />
    邮箱以及第三方登录
-   <img src="https://jiantuku.oss-cn-beijing.aliyuncs.com/share/system.png" />
+   <img src="https://jiantuku.oss-cn-beijing.aliyuncs.com/share/hivechat/06.png" />
    MCP 配置
-   <img src="https://jiantuku.oss-cn-beijing.aliyuncs.com/share/mcp.png" />
+   <img src="https://jiantuku.oss-cn-beijing.aliyuncs.com/share/hivechat/07.png" />
+   搜索设置
+   <img src="https://jiantuku.oss-cn-beijing.aliyuncs.com/share/hivechat/08.png" />
 </details>
 
 
@@ -291,4 +294,6 @@ DINGDING_CLIENT_SECRET="3vk9-VFCExNckqNUk_CL2F-HEgz7qGN-BimH0lZ1gUx6hWO7g_an2lnk
 * [飞书登录配置说明](https://www.hivechat.net/docs/auth/feishu)
 
 ### 交流群
-可加微信 wuhaoworld 拉你入群。
+<img src="https://jiantuku.oss-cn-beijing.aliyuncs.com/share/hivechat/qrcode.JPG" width="300"/>
+
+群聊过期可加微信 wuhaoworld 拉你入群。

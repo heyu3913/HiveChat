@@ -1,0 +1,22 @@
+迁移数据库
+1.首先 切换角色：
+sudo -i -u postgres
+2.进入数据库
+ psql
+3.导出数据库sql至临时目录
+\! pg_dump -U postgres -d hivechat -F p -f /tmp/hivechat_backup.sql
+4.删除原数据库hivechat中所有表
+DO $$ 
+DECLARE 
+    r RECORD;
+BEGIN 
+    FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') 
+    LOOP 
+        EXECUTE 'DROP TABLE IF EXISTS public.' || r.tablename || ' CASCADE'; 
+    END LOOP; 
+END $$;
+
+5.导入刚才导出的sql文件
+ \i /tmp/hivechat_backup.sql
+
+
