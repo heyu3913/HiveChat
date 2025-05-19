@@ -12,17 +12,14 @@ export const addBotInServer = async (botInfo: {
   avatarType: 'emoji' | 'url';
 }) => {
   const session = await auth();
-  if (!session?.user.id) {
-    return {
-      status: 'fail',
-      message: 'please login first.'
-    }
+  if (!session?.user.isAdmin) {
+    throw new Error('not allowed');
   }
 
   const botResult = await db.insert(bots)
     .values({
       ...botInfo,
-      creator: session.user.id
+      creator: 'public'
     })
     .returning();
   return {
@@ -33,82 +30,30 @@ export const addBotInServer = async (botInfo: {
 
 export const deleteBotInServer = async (botId: number) => {
   const session = await auth();
-  if (!session?.user.id) {
-    return {
-      status: 'fail',
-      message: 'please login first.'
-    }
+  if (!session?.user.isAdmin) {
+    throw new Error('not allowed');
   }
 
   await db.delete(bots)
     .where(
       and(
         eq(bots.id, botId),
-        eq(bots.creator, session.user.id)
+        eq(bots.creator, 'public')
       ));
   return {
     status: 'success'
   }
 }
 
-export const addBotToChatInServer = async (botId: number) => {
-  const session = await auth();
-  if (!session?.user.id) {
-    return {
-      status: 'fail',
-      message: 'please login first.'
-    }
-  }
-
-  const result = await db.select()
-    .from(bots)
-    .where(
-      eq(bots.id, botId),
-    );
-  if (result.length > 0) {
-    const botInfo = result[0];
-
-    const chatResult = await db.insert(chats)
-      .values({
-        title: botInfo.title,
-        botId: botInfo.id,
-        avatar: botInfo.avatar,
-        avatarType: botInfo.avatarType,
-        isWithBot: true,
-        prompt: botInfo.prompt,
-        userId: session.user.id
-      })
-      .returning();
-    return {
-      status: 'success',
-      data: chatResult[0]
-    }
-  } else {
-    return {
-      status: 'fail',
-    }
-  }
-
-
-
-}
-
 export const getBotListInServer = async () => {
   const session = await auth();
-  if (!session?.user.id) {
-    return {
-      status: 'fail',
-      data: [],
-      message: 'please login first.'
-    }
+  if (!session?.user.isAdmin) {
+    throw new Error('not allowed');
   }
   const result = await db.select()
     .from(bots)
     .where(
-      or(
-        eq(bots.creator, session?.user.id),
-        eq(bots.creator, 'public'),
-      )
+      eq(bots.creator, 'public')
     )
     .orderBy(desc(bots.createdAt));
   if (result.length > 0) {
