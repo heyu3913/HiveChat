@@ -55,9 +55,11 @@ export default async function proxyOpenAiStream(response: Response,
               }
             } else if (parsedLine.type === 'message_stop') {
               const usage = parsedLine.usage || parsedLine['amazon-bedrock-invocationMetrics'];
-              promptTokens = usage?.inputTokenCount || null;
-              completionTokens = usage?.outputTokenCount || null;
-              totalTokens = promptTokens + completionTokens;
+              if (usage) {
+                promptTokens = usage?.inputTokenCount || null;
+                completionTokens = usage?.outputTokenCount || null;
+                totalTokens = promptTokens && completionTokens ? promptTokens + completionTokens : null;
+              }
             }
           } catch (error) {
             console.error("JSON parse error:", error, "in line:", cleanedLine);
@@ -93,9 +95,9 @@ export default async function proxyOpenAiStream(response: Response,
         userId: messageInfo.userId,
         modelId: messageInfo.model,
         providerId: messageInfo.providerId,
-        inputTokens: promptTokens,
-        outputTokens: completionTokens,
-        totalTokens: totalTokens,
+        inputTokens: promptTokens || 0,
+        outputTokens: completionTokens || 0,
+        totalTokens: totalTokens || 0,
       });
       controller.close();
     }
