@@ -1,7 +1,7 @@
 'use server';
 import { db } from '@/app/db';
 import { eq, and, asc } from 'drizzle-orm';
-import { LLMModel } from '@/types/llm';
+import { LLMModel, LLMModelProvider } from '@/types/llm';
 import { llmSettingsTable, llmModels, groupModels, groups, users, messages } from '@/app/db/schema';
 import { llmModelType } from '@/app/db/schema';
 import { getLlmConfigByProvider } from '@/app/utils/llms';
@@ -62,21 +62,83 @@ export const fetchAllLlmSettings = async () => {
   return settings;
 }
 
-export const fetchLlmModels = async (providerId?: string) => {
-  let llmModelList;
+export const fetchLlmModels = async (providerId?: string): Promise<llmModelType[]> => {
+  // 明确指定字段，避免类型错误
+  const modelFields = {
+    id: llmModels.id,
+    name: llmModels.name,
+    displayName: llmModels.displayName,
+    maxTokens: llmModels.maxTokens,
+    supportVision: llmModels.supportVision,
+    supportTool: llmModels.supportTool,
+    selected: llmModels.selected,
+    providerId: llmModels.providerId,
+    providerName: llmModels.providerName,
+    type: llmModels.type,
+    order: llmModels.order,
+    createdAt: llmModels.createdAt,
+    updatedAt: llmModels.updatedAt,
+  };
   if (providerId) {
-    llmModelList = await db
-      .select()
+    const result = await db
+      .select({
+        ...modelFields,
+        providerLogo: llmSettingsTable.logo,
+        apiStyle: llmSettingsTable.apiStyle,
+      })
       .from(llmModels)
+      .innerJoin(llmSettingsTable, eq(llmModels.providerId, llmSettingsTable.provider))
       .where(eq(llmModels.providerId, providerId))
       .orderBy(asc(llmModels.order), asc(llmModels.createdAt));
-    ;
+    return result.map((item: any) => ({
+      ...item,
+      providerLogo: item.providerLogo,
+      apiStyle: item.apiStyle,
+    }));
   } else {
-    llmModelList = await db
-      .select()
-      .from(llmModels);
+    const result = await db
+      .select({
+        ...modelFields,
+        providerLogo: llmSettingsTable.logo,
+        apiStyle: llmSettingsTable.apiStyle,
+      })
+      .from(llmModels)
+      .innerJoin(llmSettingsTable, eq(llmModels.providerId, llmSettingsTable.provider));
+    return result.map((item: any) => ({
+      ...item,
+      providerLogo: item.providerLogo,
+      apiStyle: item.apiStyle,
+    }));
   }
-  return llmModelList;
+}
+
+export const getProviderById = async (providerId: string): Promise<LLMModelProvider> => {
+  const session = await auth();
+  if (!session?.user.isAdmin) {
+    throw new Error('not allowed');
+  }
+
+  const result = await db.select().from(llmSettingsTable).where(
+    eq(llmSettingsTable.provider, providerId),
+  );
+
+  if (!result || result.length === 0) {
+    const error = new Error(`Provider with ID '${providerId}' not found`);
+    (error as any).status = 404;
+    throw error;
+  }
+
+  const dbProvider = result[0];
+
+  // 将数据库字段映射到 LLMModelProvider 类型
+  return {
+    id: dbProvider.provider,
+    providerName: dbProvider.providerName,
+    apiStyle: dbProvider.apiStyle,
+    providerLogo: dbProvider.logo || undefined,
+    status: dbProvider.isActive || false,
+    type: dbProvider.type || 'default'
+  };
 }
 
 export const fetchAvailableProviders = async () => {
@@ -127,13 +189,14 @@ export const fetchAvailableLlmModels = async (requireAuth: boolean = true): Prom
         eq(llmModels.selected, true),
       )
     );
-  const llmModelList: llmModelType[] | null = result
+  const llmModelList: llmModelType[] = result
     .map((i) => {
       return {
         ...i.models,
         id: i.models?.id ?? 0,
         providerName: i.llm_settings.providerName,
         providerLogo: i.llm_settings.logo || '',
+        apiStyle: i.llm_settings.apiStyle,
       }
     })
     .filter((model) => model !== null && (!requireAuth || userModels.has(model.id)));
@@ -261,7 +324,7 @@ export const addCustomProviderInServer = async (providerInfo: {
   provider: string,
   providerName: string,
   endpoint: string,
-  api_style: string,
+  apiStyle: 'openai' | 'openai_response' | 'claude' | 'gemini',
   apikey: string,
 }) => {
   const session = await auth();

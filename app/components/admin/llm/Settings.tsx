@@ -4,11 +4,11 @@ import Markdown from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
 import remarkGfm from 'remark-gfm';
 import React, { useState, useEffect } from 'react';
-import { Button, Form, Input, Switch, Skeleton, Avatar, message, Popconfirm, Modal } from 'antd';
+import { Button, Form, Input, Switch, Skeleton, Avatar, message, Popconfirm } from 'antd';
 import { CheckCircleOutlined, CloseCircleOutlined, EditOutlined } from '@ant-design/icons';
-import { getLLMInstance } from '@/app/utils';
+import { getProviderInstance } from '@/app/utils';
 import { useTranslations } from 'next-intl';
-import { saveToServer } from '@/app/admin/llm/actions';
+import { saveToServer, getProviderById } from '@/app/admin/llm/actions';
 import { fetchLlmModels } from '@/app/admin/llm/actions';
 import useModelListStore from '@/app/store/modelList';
 import CheckApiModal from '@/app/components/admin/llm/CheckApiModal';
@@ -16,7 +16,7 @@ import EditModelModal from '@/app/components/admin/llm/EditModelModal';
 import AddModelModal from '@/app/components/admin/llm/AddModelModal';
 import RenameProviderModal from '@/app/components/admin/llm/RenameProviderModal';
 import ModelList from '@/app/components/admin/llm/ModelList';
-import { LLMModel } from '@/types/llm';
+import { LLMModel, LLMModelProvider } from '@/types/llm';
 import { getLlmOriginConfigByProvider } from '@/app/utils/llms';
 import { deleteCustomProviderInServer } from '@/app/admin/llm/actions';
 import { useRouter } from "next/navigation";
@@ -29,11 +29,17 @@ type FormValues = {
 
 const Settings = (props: { providerId: string }) => {
   const router = useRouter();
-  const { allProviderList, initModelList, toggleProvider, deleteCustomProvider } = useModelListStore();
-  const provider = allProviderList.find((i) => i.id === props.providerId)!;
+  const { initModelList, toggleProvider, deleteCustomProvider } = useModelListStore();
   const t = useTranslations('Admin.Models');
   const [isClient, setIsClient] = useState(false);
   const [isPending, setIsPending] = useState(true);
+  const [provider, setProvider] = useState<LLMModelProvider | null>(null);
+  const [providerError, setProviderError] = useState<string | null>(null);
+  const [formInitialValues, setFormInitialValues] = useState<FormValues>({
+    isActive: false,
+    apikey: '',
+    endpoint: ''
+  });
 
   const [isCheckApiModalOpen, setIsCheckApiModalOpen] = useState(false);
   const [isCustomModelModalOpen, setIsCustomModelModalOpen] = useState(false);
@@ -57,6 +63,7 @@ const Settings = (props: { providerId: string }) => {
       'moonshot': 'https://api.moonshot.cn/v1',
       'ollama': 'http://127.0.0.1:11434/v1',
       'openai': 'https://api.openai.com/v1',
+      'openai_response': 'https://api.openai.com/v1',
       'qwen': 'https://dashscope.aliyuncs.com/compatible-mode/v1',
       'qianfan': 'https://qianfan.baidubce.com/v2',
       'siliconflow': 'https://api.siliconflow.cn/v1',
@@ -92,7 +99,10 @@ const Settings = (props: { providerId: string }) => {
       return 'https://k2swpw8zgf.feishu.cn/wiki/J3FtwGumMi7k0vktB41cHvjTnTg';
     }
   }
-  const chatbot = getLLMInstance(props.providerId)
+
+  // 只有当 provider 存在时才初始化 chatbot
+  const chatbot = provider ? getProviderInstance(props.providerId, provider.apiStyle) : null;
+
   useEffect(() => {
     setIsClient(true);
   }, []);
@@ -110,35 +120,64 @@ const Settings = (props: { providerId: string }) => {
   }
 
   useEffect(() => {
-    const fetchLlmConfig = async (): Promise<void> => {
-      const result = await getLlmOriginConfigByProvider(provider.id);
-      const endpointUrl = getEndpointBaseUrl(provider.id, result.endpoint?.trim());
-      form.setFieldsValue({
-        isActive: result.isActive || false,
-        apikey: result.apikey || '',
-        endpoint: endpointUrl,
-      });
-      setInputEndpoint(endpointUrl);
-    };
-
-    const fetchModelList = async (): Promise<void> => {
-      const result = await fetchLlmModels(provider.id);
-      initModelList(result)
-    }
-
-    const initData = async () => {
+    const fetchProviderData = async (): Promise<void> => {
       try {
-        await Promise.all([fetchLlmConfig(), fetchModelList()]);
+        // 首先获取 provider 信息
+        const providerData = await getProviderById(props.providerId);
+        setProvider(providerData);
+        setProviderError(null);
+
+        // 然后获取配置和模型列表
+        const result = await getLlmOriginConfigByProvider(providerData.id);
+        const endpointUrl = getEndpointBaseUrl(providerData.id, result.endpoint?.trim());
+
+        // 设置表单初始值
+        const initialValues = {
+          isActive: result.isActive || false,
+          apikey: result.apikey || '',
+          endpoint: endpointUrl,
+        };
+        setFormInitialValues(initialValues);
+        setInputEndpoint(endpointUrl);
+
+        const modelListResult = await fetchLlmModels(providerData.id);
+        initModelList(modelListResult);
+
         setIsPending(false);
-      } catch (error) {
+      } catch (error: any) {
+        console.error('Error fetching provider data:', error);
+        if (error.status === 404) {
+          setProviderError('Provider not found');
+          // 重定向到 404 页面或者 LLM 列表页面
+          router.push('/admin/llm');
+        } else {
+          setProviderError(error.message || 'Failed to load provider data');
+        }
         setIsPending(false);
       }
     };
 
-    initData();
-  }, [form, initModelList, provider]);
+    fetchProviderData();
+  }, [initModelList, props.providerId, router]);
 
   if (!isClient) return null;
+
+  // 如果有错误，显示错误信息
+  if (providerError) {
+    return (
+      <div className='flex w-full flex-col items-center justify-center h-64'>
+        <h2 className="text-red-500 text-lg mb-4">Error: {providerError}</h2>
+        <Button onClick={() => router.push('/admin/llm')}>
+          返回选择服务商
+        </Button>
+      </div>
+    );
+  }
+
+  // 如果还在加载或者 provider 不存在，显示加载状态
+  if (isPending || !provider) {
+    return <Skeleton active style={{ 'marginTop': '1.5rem' }} />;
+  }
 
   const onFinish = (values: FormValues) => {
     toggleProvider(provider.id, values.isActive);
@@ -146,6 +185,12 @@ const Settings = (props: { providerId: string }) => {
   };
 
   const checkApi = async (modelId: string) => {
+    if (!chatbot) {
+      setCheckResult('error');
+      setErrorMessage('Provider not loaded');
+      return;
+    }
+
     setCheckResult('pending')
     const result = await chatbot.check(modelId, form.getFieldValue('apikey'), form.getFieldValue('endpoint'));
     if (result.status === 'success') {
@@ -157,23 +202,27 @@ const Settings = (props: { providerId: string }) => {
     }
   };
 
-  const getEndpointExtraNotice = (providerId: string, inputEndpoint: string) => {
-    switch (providerId) {
+  const getEndpointExtraNotice = (apiStyle: string, inputEndpoint: string) => {
+    switch (apiStyle) {
       case 'claude':
         return <span className='ml-3'>{inputEndpoint + '/messages'}</span>
+      case 'openai_response':
+        return <span className='ml-3'>{inputEndpoint + '/responses'}</span>
       case 'gemini':
         return <span className='ml-3'>{inputEndpoint + '/v1beta/models/${model}:streamGenerateContent?alt=sse'}</span>
       default:
         return <span className='ml-3'>{inputEndpoint + '/chat/completions'}</span>
     }
   }
+
   return (
-    isPending ? <Skeleton active style={{ 'marginTop': '1.5rem' }} /> :
-      <div className='flex w-full flex-col'>
+    <div className='flex w-full flex-col'>
         <Form
           layout="vertical"
           form={form}
           onFinish={onFinish}
+          initialValues={formInitialValues}
+          key={provider?.id} // 使用 key 来强制重新渲染表单当 provider 改变时
         >
           <div className='flex flex-row justify-between my-4 items-center'>
             <div className='flex items-center justify-center'>
@@ -231,39 +280,23 @@ const Settings = (props: { providerId: string }) => {
               </Button>
             </Link>
           </div>
-          {
-            props.providerId === 'ollama' || provider?.type === 'custom' ?
-              <Form.Item
-                label={<span className='font-medium'>{t('serviceEndpoint')}</span>}
-                name='endpoint'
-                extra={<span className='ml-3'>{inputEndpoint + '/chat/completions'}</span>}
-              >
-                <Input
-                  type='url'
-                  value={inputEndpoint}
-                  onChange={(e) => setInputEndpoint(e.target.value)}
-                  onBlur={() => {
-                    form.submit();
-                  }
-                  }
-                />
-              </Form.Item> :
-              <Form.Item
-                label={<span className='font-medium'>{t('endpoint')} ({t('optional')})</span>}
-                name='endpoint'
-                extra={getEndpointExtraNotice(props.providerId, inputEndpoint)}
-              >
-                <Input
-                  type='url'
-                  value={inputEndpoint}
-                  onChange={(e) => setInputEndpoint(e.target.value)}
-                  onBlur={() => {
-                    form.submit();
-                  }
-                  }
-                />
-              </Form.Item>
-          }
+          <Form.Item
+            label={<span className='font-medium'>{t('endpoint')} ({t('optional')})</span>}
+            name='endpoint'
+            extra={getEndpointExtraNotice(provider.apiStyle, inputEndpoint)}
+          >
+            <Input
+              type='url'
+              onChange={(e) => {
+                setInputEndpoint(e.target.value);
+                // 同时更新表单字段值
+                // form.setFieldValue('endpoint', e.target.value);
+              }}
+              onBlur={() => {
+                form.submit();
+              }}
+            />
+          </Form.Item>
         </Form>
         <div className='flex flex-col -mt-2 mb-2'>
           <div className='font-medium'>{t('testConnect')}</div>
@@ -342,15 +375,13 @@ const Settings = (props: { providerId: string }) => {
         <AddModelModal
           isCustomModelModalOpen={isCustomModelModalOpen}
           setIsCustomModelModalOpen={setIsCustomModelModalOpen}
-          providerId={provider?.id}
-          providerName={provider?.providerName}
+          provider={provider}
         />
         <EditModelModal
           model={curretEditModal}
           isEditModelModalOpen={isEditModelModalOpen}
           setIsEditModelModalOpen={setIsEditModelModalOpen}
-          providerId={provider?.id}
-          providerName={provider?.providerName}
+          provider={provider}
         />
         <RenameProviderModal
           isModalOpen={isRenameProviderModalOpen}
