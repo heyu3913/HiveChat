@@ -59,7 +59,7 @@ export function mcpToolsToOpenAIResponseTools(mcpTools: MCPTool[]): FunctionTool
     type: 'function',
     name: tool.name,
     description: tool.description,
-    strict: null,
+    strict: false,
     parameters: {
       type: 'object',
       properties: filterPropertieAttributes(tool)
