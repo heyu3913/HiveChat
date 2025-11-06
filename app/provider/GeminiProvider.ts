@@ -237,7 +237,7 @@ export default class GeminiApi implements LLMApi {
                       resTextRaw = await res.clone().text();
                     }
                     const responseTexts = [resTextRaw];
-                    if (res.status >= 400 && res.status < 500) {
+                    if (res.status >= 400 && res.status < 500 && res.status !== 429) {
                       options.onError?.(new InvalidAPIKeyError('Invalid API Key'));
                     } else {
                       this.answer = responseTexts.join("\n\n");
@@ -355,7 +355,7 @@ export default class GeminiApi implements LLMApi {
         }
       }
     }
-    if (options.config.model.includes('image-generation')) {
+    if (options.config.model.includes('image')) {
       generationConfig = {
         "generationConfig": {
           "responseModalities": [
@@ -399,7 +399,8 @@ export default class GeminiApi implements LLMApi {
             const responseTexts = [resTextRaw];
             if (res.status === 459) {
               options.onError?.(new OverQuotaError('Over Quota'));
-            } else if (res.status >= 400 && res.status < 500) {
+
+            } else if (res.status >= 400 && res.status < 500 && res.status !== 429) {
               options.onError?.(new InvalidAPIKeyError('Invalid API Key'));
             } else {
               this.answer = responseTexts.join("\n\n");
